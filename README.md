@@ -6,3 +6,13 @@ This repo contains a minimal working example of a file uploading app utilizing W
 - https://github.com/quic-go/webtransport-go
 
 This app was written to test WebTransport performance for transferring large files. **This application will eat your homework, and do worse. Do not use for any kind of real-life setup.**
+
+## Running
+
+- Install dependencies with `go mod tidy`
+- Run with `go run main.go`
+- Connect to the frontend at `http://localhost:9090
+
+## Backend
+
+The backend will listen on `http://localhost:9090` (UDP), with the upload route `/uploadFile`. You can add `?fileName=foo` to the query string to specify the name for the file.
