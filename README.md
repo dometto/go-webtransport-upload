@@ -11,7 +11,8 @@ This app was written to test WebTransport performance for transferring large fil
 
 - Install dependencies with `go mod tidy`
 - Run with `go run main.go`
-- Connect to the frontend at `http://localhost:9090
+    - The application will print out an auth token. Store it -- you will need it to connect to the frontend.
+- Connect to the frontend at `http://localhost:9090?token=<auth_token>`
 
 ## Backend
 

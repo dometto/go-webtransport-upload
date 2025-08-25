@@ -16,6 +16,7 @@
         let statusDiv = document.getElementById('status');
         let serverUrl = 'https://127.0.0.1:9090/uploadFile'
         let serverHash = new Uint8Array(%%CERTHASH%%)
+        let token = "%%TOKEN%%";
 
         async function establishSession(url, hash) {
             result = new WebTransport(url, {
@@ -42,7 +43,7 @@
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
-            const transport = await establishSession(serverUrl + '?fileName=' + file.name, serverHash);
+            const transport = await establishSession(serverUrl + '?token=' + token + '&fileName=' + file.name, serverHash);
             
             if (!file) {
                 alert('Please select a file');

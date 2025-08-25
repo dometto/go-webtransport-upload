@@ -6,11 +6,11 @@ import (
     "net/http"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
     "crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"crypto/rand"
     "math/big"
     "time"
     "strings"
@@ -85,6 +85,22 @@ func formatByteSlice(b []byte) string {
 	return s
 }
 
+func tokenGenerator(len int) string {
+	b := make([]byte, len)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
+func handleAuth(clientToken string, token string, w http.ResponseWriter) {
+	// very basic auth
+	fmt.Printf("Client token: %s\n", clientToken)
+	if clientToken != token {
+		fmt.Println("Authentication failed!")
+		w.WriteHeader(500)
+		return
+	}
+}
+
 func runClient(domain string) {
 	ctx := context.Background()
 
@@ -143,11 +159,13 @@ func handleUpload(fName string, sess *webtransport.Session) {
     }
 }
 
-func runHTTPServer(certHash [32]byte) {
+func runHTTPServer(certHash [32]byte, token string) {
     mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleAuth(r.URL.Query().Get("token"), token, w)
         w.Header().Set("Content-Type", "text/html")
         content := strings.ReplaceAll(indexHTML, "%%CERTHASH%%", formatByteSlice(certHash[:]))
+		content = strings.ReplaceAll(content, "%%TOKEN%%", token)
         w.Write([]byte(content))
     })
 	http.ListenAndServe("localhost:9090", mux)
@@ -156,9 +174,12 @@ func runHTTPServer(certHash [32]byte) {
 func runServer() {
     tlsConf, err := getTLSConf(time.Now(), time.Now().Add(10*24*time.Hour))
 	certHash := sha256.Sum256(tlsConf.Certificates[0].Leaf.Raw)
-    fmt.Printf("\n%x", certHash)
+    fmt.Printf("Certificate hash: %x\n", certHash)
 
-	go runHTTPServer(certHash)
+	token := tokenGenerator(32)
+	fmt.Printf("Auth token: %s\n", token)
+	go runHTTPServer(certHash, token)
+
 
 	wmux := http.NewServeMux()
 	wtServer := webtransport.Server{
@@ -175,15 +196,15 @@ func runServer() {
     defer wtServer.Close()
 
 	wmux.HandleFunc("/uploadFile", func(w http.ResponseWriter, r *http.Request) {
+		handleAuth(r.URL.Query().Get("token"), token, w)
+
 		conn, err := wtServer.Upgrade(w, r)
 		if err != nil {
 			fmt.Printf("upgrading failed: %s", err)
 			w.WriteHeader(500)
 			return
-		}
-        fmt.Println("Got hit")
-        //fName := r.Header.Get("Upload-File-Name")
-        fName := r.URL.Query().Get("fileName")
+		}	
+		fName := r.URL.Query().Get("fileName")
         fmt.Printf("File name: %s\n", fName)
         handleUpload(fName, conn)
 	})
