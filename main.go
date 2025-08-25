@@ -19,6 +19,7 @@ import (
     "os"
     "io"
 	_ "embed"
+	"flag"
 
     //"github.com/quic-go/quic-go"
     "github.com/quic-go/quic-go/http3"
@@ -159,26 +160,27 @@ func handleUpload(fName string, sess *webtransport.Session) {
     }
 }
 
-func runHTTPServer(certHash [32]byte, token string) {
+func runHTTPServer(certHash [32]byte, token string, clientServerUrl string) {
     mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Got connection on TCP")
 		handleAuth(r.URL.Query().Get("token"), token, w)
         w.Header().Set("Content-Type", "text/html")
         content := strings.ReplaceAll(indexHTML, "%%CERTHASH%%", formatByteSlice(certHash[:]))
 		content = strings.ReplaceAll(content, "%%TOKEN%%", token)
+		content = strings.ReplaceAll(content, "%%SERVERURL%%", clientServerUrl)
         w.Write([]byte(content))
     })
 	http.ListenAndServe("localhost:9090", mux)
 }
 
-func runServer() {
-    tlsConf, err := getTLSConf(time.Now(), time.Now().Add(10*24*time.Hour))
+func runServer(tlsConf *tls.Config, clientServerUrl string) {
 	certHash := sha256.Sum256(tlsConf.Certificates[0].Leaf.Raw)
     fmt.Printf("Certificate hash: %x\n", certHash)
 
 	token := tokenGenerator(32)
 	fmt.Printf("Auth token: %s\n", token)
-	go runHTTPServer(certHash, token)
+	go runHTTPServer(certHash, token, clientServerUrl)
 
 
 	wmux := http.NewServeMux()
@@ -209,7 +211,7 @@ func runServer() {
         handleUpload(fName, conn)
 	})
 
-	err = wtServer.ListenAndServe()
+	err := wtServer.ListenAndServe()
 	checkErr(err)
 }
 
@@ -224,6 +226,17 @@ func getTLSConfFromFile(pem string, key string) *tls.Config {
 	}
 }
 
-func main() {    
-    runServer()
+func main() {
+	clientServerUrl := flag.String("client-server-url", "https://127.0.0.1:9090/uploadFile", "the URL to which the client should connect (can be a reverse proxy to the backend of this app).")
+	useReadyCert := flag.Bool("use-existing-cert", false, "Use certificate.pem and certificate.key from the current dir")
+	flag.Parse()
+
+	var tlsConf *tls.Config
+
+	if *useReadyCert == true {
+		tlsConf = getTLSConfFromFile("certificate.pem", "certificate.key")
+	} else {
+		tlsConf, _ = getTLSConf(time.Now(), time.Now().Add(10*24*time.Hour))
+	}
+    runServer(tlsConf, *clientServerUrl)
 }
