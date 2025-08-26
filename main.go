@@ -92,16 +92,6 @@ func tokenGenerator(len int) string {
 	return fmt.Sprintf("%x", b)
 }
 
-func handleAuth(clientToken string, token string, w http.ResponseWriter) {
-	// very basic auth
-	fmt.Printf("Client token: %s\n", clientToken)
-	if clientToken != token {
-		fmt.Println("Authentication failed!")
-		w.WriteHeader(500)
-		return
-	}
-}
-
 func runClient(domain string) {
 	ctx := context.Background()
 
@@ -164,8 +154,14 @@ func runHTTPServer(certHash [32]byte, token string, clientServerUrl string) {
     mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Got connection on TCP")
-		handleAuth(r.URL.Query().Get("token"), token, w)
-        w.Header().Set("Content-Type", "text/html")
+
+		if r.URL.Query().Get("token") != token {
+			fmt.Println("Authentication failed!")
+			w.WriteHeader(401)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
         content := strings.ReplaceAll(indexHTML, "%%CERTHASH%%", formatByteSlice(certHash[:]))
 		content = strings.ReplaceAll(content, "%%TOKEN%%", token)
 		content = strings.ReplaceAll(content, "%%SERVERURL%%", clientServerUrl)
@@ -198,7 +194,11 @@ func runServer(tlsConf *tls.Config, clientServerUrl string) {
     defer wtServer.Close()
 
 	wmux.HandleFunc("/uploadFile", func(w http.ResponseWriter, r *http.Request) {
-		handleAuth(r.URL.Query().Get("token"), token, w)
+		if r.URL.Query().Get("token") != token {
+			fmt.Println("Authentication failed!")
+			w.WriteHeader(401)
+			return
+		}
 
 		conn, err := wtServer.Upgrade(w, r)
 		if err != nil {
